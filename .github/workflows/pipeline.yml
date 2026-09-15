@@ -1,0 +1,26 @@
+name: Run classification pipeline
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"  # every 3 hours
+  workflow_dispatch: {}     # lets you trigger it manually from the Actions tab
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REGION_BBOX: ${{ secrets.REGION_BBOX }}
+        run: python pipeline/main.py
