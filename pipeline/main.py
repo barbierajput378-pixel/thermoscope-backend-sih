@@ -14,18 +14,27 @@ def to_overpass_bbox(region_bbox):
     return f"{min_lat},{min_lon},{max_lat},{max_lon}"
 
 
-def hotspot_seen_before(supabase, lat, lon, tolerance=0.01):
-    """Very rough check for now: any prior row within ~1km of this lat/lon."""
-    result = (
-        supabase.table("hotspots")
-        .select("id")
-        .gte("lat", lat - tolerance)
-        .lte("lat", lat + tolerance)
-        .gte("lon", lon - tolerance)
-        .lte("lon", lon + tolerance)
-        .execute()
-    )
-    return len(result.data) > 0
+def fetch_existing_hotspots(supabase):
+    """Fetch all existing hotspots once for efficient deduplication."""
+    result = supabase.table("hotspots").select("lat,lon").execute()
+    return [(row["lat"], row["lon"]) for row in result.data]
+
+
+def hotspot_seen_before(lat, lon, existing_hotspots, tolerance=0.01):
+    """Check if hotspot exists within tolerance of any prior hotspot.
+     
+    Args:
+        lat, lon: coordinates of new hotspot
+        existing_hotspots: pre-fetched list of (lat, lon) tuples
+        tolerance: search radius in degrees (~1km at equator)
+     
+    Returns:
+        bool: True if hotspot exists nearby in existing_hotspots
+    """
+    for ex_lat, ex_lon in existing_hotspots:
+        if abs(lat - ex_lat) <= tolerance and abs(lon - ex_lon) <= tolerance:
+            return True
+    return False
 
 
 def run():
@@ -33,10 +42,11 @@ def run():
 
     hotspots = fetch_hotspots()
     facilities = fetch_facilities(to_overpass_bbox(REGION_BBOX))
+    existing_hotspots = fetch_existing_hotspots(supabase)
 
     rows = []
     for h in hotspots:
-        seen_before = hotspot_seen_before(supabase, h["lat"], h["lon"])
+        seen_before = hotspot_seen_before(h["lat"], h["lon"], existing_hotspots)
         land_cover = land_cover_at(h["lat"], h["lon"])
         result = classify_hotspot(h, facilities, seen_before, land_cover)
 
