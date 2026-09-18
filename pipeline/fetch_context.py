@@ -1,18 +1,18 @@
-"""Pulls facility locations (OSM) for the region. Land-cover lookup TODO."""
-
-import time
+"""Pulls facility locations (OSM) for the region. Land-cover lookup via Overpass."""
 
 import requests
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
-    "https://overpass.osm.ch/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
 ]
+
+HEADERS = {"User-Agent": "thermoscope-sih26162/1.0 (SIH hackathon project)"}
 
 # OSM tags for the facility types we care about
 FACILITY_QUERY_TEMPLATE = """
-[out:json][timeout:90];
+[out:json][timeout:60];
 (
   node["man_made"="works"]({bbox});
   node["industrial"]({bbox});
@@ -25,27 +25,25 @@ out center;
 """
 
 
+def _run_overpass_query(query):
+    """Tries each mirror in order, returns the first successful response's JSON."""
+    last_err = None
+    for url in OVERPASS_URLS:
+        try:
+            response = requests.post(url, data={"data": query}, headers=HEADERS, timeout=45)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            last_err = e
+            continue
+    raise RuntimeError(f"All Overpass mirrors failed: {last_err}")
+
+
 def fetch_facilities(bbox):
     """bbox format expected by Overpass: south,west,north,east"""
     query = FACILITY_QUERY_TEMPLATE.format(bbox=bbox)
-    headers = {"User-Agent": "thermoscope-sih26162/1.0 (SIH hackathon project)"}
-    last_err = None
+    data = _run_overpass_query(query)
 
-    for url in OVERPASS_URLS:
-        try:
-            response = requests.post(url, data={"data": query}, headers=headers, timeout=90)
-            response.raise_for_status()
-            data = response.json()
-            return _parse_facilities(data)
-        except requests.RequestException as e:
-            last_err = e
-            time.sleep(2)
-            continue
-
-    raise RuntimeError(f"All Overpass mirrors failed. Last error: {last_err}")
-
-
-def _parse_facilities(data):
     facilities = []
     for el in data.get("elements", []):
         lat = el.get("lat") or el.get("center", {}).get("lat")
@@ -66,5 +64,27 @@ def _parse_facilities(data):
 
 
 def land_cover_at(lat, lon):
-    """TODO: wire up ESA WorldCover or similar. Returns a placeholder for now."""
+    """Checks OSM tags in a small radius around the point to guess land cover."""
+    query = f"""
+    [out:json][timeout:25];
+    (
+      way["natural"="wood"](around:500,{lat},{lon});
+      way["landuse"="forest"](around:500,{lat},{lon});
+      way["landuse"="farmland"](around:500,{lat},{lon});
+      way["landuse"="farm"](around:500,{lat},{lon});
+    );
+    out tags 1;
+    """
+    try:
+        data = _run_overpass_query(query)
+    except RuntimeError:
+        return "unknown"
+
+    for el in data.get("elements", []):
+        tags = el.get("tags", {})
+        if tags.get("natural") == "wood" or tags.get("landuse") == "forest":
+            return "forest"
+        if tags.get("landuse") in ("farmland", "farm"):
+            return "farmland"
+
     return "unknown"
