@@ -1,7 +1,11 @@
 """Pulls raw thermal hotspots from NASA FIRMS for the configured region."""
 
 import requests
+import urllib3
 from config import FIRMS_MAP_KEY, REGION_BBOX
+
+# GitHub Actions runners sometimes can't reach NASA's IPv6 endpoint - force IPv4
+urllib3.util.connection.HAS_IPV6 = False
 
 FIRMS_URL = (
     "https://firms.modaps.eosdis.nasa.gov/api/area/csv/"
