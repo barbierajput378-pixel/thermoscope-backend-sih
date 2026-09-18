@@ -12,7 +12,7 @@ and writes the result into Supabase — where the frontend reads it directly.
 ## Structure
 pipeline/
 fetch_firms.py - pulls raw hotspots from NASA FIRMS API (IPv4-forced for CI compatibility)
-fetch_context.py - pulls OSM facility data via Overpass API + land cover for each hotspot
+fetch_context.py - pulls OSM facility data + land cover via Overpass API, with multi-mirror fallback
 classify.py - proximity + persistence rules -> classification + confidence
 main.py - runs the full pipeline end to end, writes results to Supabase
 config.py - region bounding box, thresholds, API keys (from env)
@@ -63,7 +63,7 @@ frontend) can write.
 ## Status
 
 Working end-to-end. Pipeline runs live on a schedule, writes real classified
-hotspots to Supabase, frontend can query the table directly. Not yet built:
-auto-alerting fire authorities (future scope), ML-based classification
-(current version is rule-based), land-cover lookup (`land_cover_at` is a
-stub, always returns "unknown").
+hotspots to Supabase, frontend can query the table directly. Classification
+is rule-based (proximity + persistence + OSM-derived land cover), with
+multi-mirror fallback on the Overpass calls for reliability. Not yet built:
+auto-alerting fire authorities (future scope), ML-based classification.
