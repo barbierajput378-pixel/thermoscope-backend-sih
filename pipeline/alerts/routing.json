@@ -1,0 +1,42 @@
+{
+  "region": "Odisha industrial/mining belt",
+  "routes": [
+    {
+      "classification": "industrial_fire",
+      "priority": "high",
+      "authority": "State Pollution Control Board (Odisha)",
+      "contact_env_var": "ALERT_EMAIL_TO_PCB"
+    },
+    {
+      "classification": "industrial_fire",
+      "priority": "low",
+      "authority": "District Fire & Emergency Services",
+      "contact_env_var": "ALERT_EMAIL_TO_FIRE_SERVICES"
+    },
+    {
+      "classification": "gas_flare",
+      "priority": "high",
+      "authority": "Directorate of Mine Safety",
+      "contact_env_var": "ALERT_EMAIL_TO_MINE_SAFETY"
+    },
+    {
+      "classification": "wildfire",
+      "priority": "high",
+      "authority": "Odisha Forest Department",
+      "contact_env_var": "ALERT_EMAIL_TO_FOREST_DEPT"
+    },
+    {
+      "classification": "agricultural_burning",
+      "priority": "low",
+      "authority": "District Agriculture Office",
+      "contact_env_var": "ALERT_EMAIL_TO_AGRI_OFFICE"
+    },
+    {
+      "classification": "risk_warning",
+      "priority": "high",
+      "authority": "Regional Disaster Monitoring Desk",
+      "contact_env_var": "ALERT_EMAIL_TO_MONITORING_DESK"
+    }
+  ],
+  "default_fallback_authority": "Regional Disaster Monitoring Desk"
+}

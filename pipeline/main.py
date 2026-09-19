@@ -1,5 +1,8 @@
 """Runs the full pipeline: fetch -> context -> classify -> write to Supabase."""
 
+import logging
+import os
+
 from supabase import create_client
 
 from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, REGION_BBOX
@@ -52,7 +55,24 @@ def run():
         )
 
     if rows:
-        supabase.table("hotspots").insert(rows).execute()
+        write_result = supabase.table("hotspots").insert(rows).execute()
+
+        # Alerts are optional and intentionally occur only after a successful hotspot
+        # write.  A failure here must never affect the completed pipeline run.
+        if os.environ.get("ENABLE_ALERTS", "").lower() == "true":
+            try:
+                from alerts.alert_engine import should_alert, send_alert
+
+                written_rows = getattr(write_result, "data", None) or rows
+                for original, written in zip(rows, written_rows):
+                    if should_alert(
+                        original["classification"], original["confidence"], original["priority"]
+                    ):
+                        payload = {**original, **written}
+                        payload.setdefault("location_id", f"{payload['lat']:.3f},{payload['lon']:.3f}")
+                        send_alert(payload, routed_to=None, supabase_client=supabase)
+            except Exception:
+                logging.getLogger(__name__).exception("Optional alert processing failed")
 
     print(f"Processed {len(rows)} hotspots.")
 

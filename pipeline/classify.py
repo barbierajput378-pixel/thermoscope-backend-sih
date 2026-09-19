@@ -1,8 +1,17 @@
-"""Rule-based classification: proximity to known facilities + persistence."""
+"""Rule-based classification: proximity to known facilities + persistence.
+
+The optional ML branch is deliberately a thin wrapper around this established rule
+engine.  If it is not explicitly enabled (or is unavailable), this module behaves
+exactly as it did before.
+"""
 
 import math
+import logging
+import os
 
 from config import FACILITY_PROXIMITY_METERS
+
+logger = logging.getLogger(__name__)
 
 
 def haversine_meters(lat1, lon1, lat2, lon2):
@@ -48,10 +57,35 @@ def classify_hotspot(hotspot, facilities, seen_before, land_cover):
 
     priority = "high" if (classification == "industrial_fire" and not seen_before) else "low"
 
-    return {
+    rule_result = {
         "classification": classification,
         "confidence": confidence,
         "priority": priority,
         "nearest_facility": facility["name"] if facility else None,
         "distance_m": round(dist) if facility else None,
     }
+
+    # ML is opt-in and any model error must leave the proven rule result intact.
+    if os.environ.get("USE_ML_CLASSIFIER", "").lower() == "true":
+        try:
+            from ml.classify_ml import classify_with_model, model_available
+
+            if model_available():
+                ml_label, ml_confidence = classify_with_model(
+                    rule_result["distance_m"], int(bool(seen_before)),
+                    hotspot.get("frp", hotspot.get("brightness", 0)),
+                    facility.get("type") if facility else None,
+                )
+                rule_result["classification"] = ml_label
+                rule_result["confidence"] = ml_confidence
+                rule_result["priority"] = (
+                    "high" if ml_label == "industrial_fire" and not seen_before else "low"
+                )
+                logger.info("ML classifier used for hotspot at %s,%s", hotspot["lat"], hotspot["lon"])
+                return rule_result
+            logger.info("Rule-based classifier used: ML model file is unavailable")
+        except Exception:
+            logger.exception("ML classification failed; using rule-based result")
+
+    logger.info("Rule-based classifier used for hotspot at %s,%s", hotspot["lat"], hotspot["lon"])
+    return rule_result
