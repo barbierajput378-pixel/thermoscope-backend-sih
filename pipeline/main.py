@@ -5,10 +5,10 @@ import os
 
 from supabase import create_client
 
-from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, REGION_BBOX
+from config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, REGION_BBOX, FACILITY_PROXIMITY_METERS
 from fetch_firms import fetch_hotspots
 from fetch_context import fetch_facilities, land_cover_at
-from classify import classify_hotspot
+from classify import classify_hotspot, nearest_facility
 
 
 def to_overpass_bbox(region_bbox):
@@ -40,7 +40,15 @@ def run():
     rows = []
     for h in hotspots:
         seen_before = hotspot_seen_before(supabase, h["lat"], h["lon"])
-        land_cover = land_cover_at(h["lat"], h["lon"])
+
+        # Only call the (slow, network-bound) land-cover lookup when it's
+        # actually needed - i.e. no facility nearby to classify against.
+        facility, dist = nearest_facility(h, facilities)
+        if facility and dist <= FACILITY_PROXIMITY_METERS:
+            land_cover = "unknown"
+        else:
+            land_cover = land_cover_at(h["lat"], h["lon"])
+
         result = classify_hotspot(h, facilities, seen_before, land_cover)
 
         rows.append(

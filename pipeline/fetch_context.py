@@ -30,7 +30,7 @@ def _run_overpass_query(query):
     last_err = None
     for url in OVERPASS_URLS:
         try:
-            response = requests.post(url, data={"data": query}, headers=HEADERS, timeout=45)
+            response = requests.post(url, data={"data": query}, headers=HEADERS, timeout=15)
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
