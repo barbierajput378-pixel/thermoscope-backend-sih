@@ -65,5 +65,23 @@ frontend) can write.
 Working end-to-end. Pipeline runs live on a schedule, writes real classified
 hotspots to Supabase, frontend can query the table directly. Classification
 is rule-based (proximity + persistence + OSM-derived land cover), with
-multi-mirror fallback on the Overpass calls for reliability. Not yet built:
-auto-alerting fire authorities (future scope), ML-based classification.
+multi-mirror fallback on the Overpass calls for reliability.
+
+## New and optional: ML, risk, and alerts
+
+These features are disabled unless their environment flags are set, so the
+scheduled rule-based pipeline retains its original behavior. Install the updated
+requirements before using ML tools.
+
+- **ML classification:** run `python pipeline/ml/train_model.py --csv history.csv`
+  (or omit `--csv` to read `hotspots` from Supabase). It uses a location-grouped
+  test split and saves `pipeline/ml/fire_classifier.pkl`. Set
+  `USE_ML_CLASSIFIER=true` only after reviewing the evaluation output.
+- **Daily risk scoring:** run `python pipeline/risk/risk_scoring.py`. It produces
+  facility-level 0–100 pre-fire risk scores in `risk_zones`. Without weather API
+  configuration it explicitly uses deterministic mock conditions for demos. Run
+  `supabase/risk_zones_schema.sql` first.
+- **Alerts:** set `ENABLE_ALERTS=true` and email/routing environment variables.
+  Alerts are sent only after hotspot writes and are deduplicated for the configured
+  cooldown. With no email configuration they are safely logged as `[DRY RUN]`.
+  Run `supabase/alerts_schema.sql` first.
