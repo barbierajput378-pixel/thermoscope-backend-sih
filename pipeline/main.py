@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections import defaultdict
 
 from supabase import create_client
 
@@ -15,6 +16,10 @@ def to_overpass_bbox(region_bbox):
     # REGION_BBOX is min_lon,min_lat,max_lon,max_lat -> Overpass wants south,west,north,east
     min_lon, min_lat, max_lon, max_lat = [float(v) for v in region_bbox.split(",")]
     return f"{min_lat},{min_lon},{max_lat},{max_lon}"
+
+
+def _coord_bucket(lat, lon, tolerance=0.01):
+    return (round(float(lat) / tolerance), round(float(lon) / tolerance))
 
 
 def hotspot_seen_before(supabase, lat, lon, tolerance=0.01):
@@ -31,15 +36,42 @@ def hotspot_seen_before(supabase, lat, lon, tolerance=0.01):
     return len(result.data) > 0
 
 
+def build_seen_before_index(supabase, tolerance=0.01):
+    """Warm a bucketed coordinate index so we avoid one DB query per hotspot."""
+    result = supabase.table("hotspots").select("lat,lon").execute()
+    seen = defaultdict(list)
+    for row in result.data or []:
+        lat = row.get("lat")
+        lon = row.get("lon")
+        if lat is None or lon is None:
+            continue
+        seen[_coord_bucket(lat, lon, tolerance)].append((float(lat), float(lon)))
+    return seen
+
+
+def has_seen_before(seen_index, lat, lon, tolerance=0.01):
+    """Check nearby buckets and preserve the original exact tolerance behavior."""
+    lat_bucket, lon_bucket = _coord_bucket(lat, lon, tolerance)
+    for lat_offset in (-1, 0, 1):
+        for lon_offset in (-1, 0, 1):
+            for seen_lat, seen_lon in seen_index.get(
+                (lat_bucket + lat_offset, lon_bucket + lon_offset), ()
+            ):
+                if abs(float(lat) - seen_lat) <= tolerance and abs(float(lon) - seen_lon) <= tolerance:
+                    return True
+    return False
+
+
 def run():
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     hotspots = fetch_hotspots()
     facilities = fetch_facilities(to_overpass_bbox(REGION_BBOX))
+    seen_before_index = build_seen_before_index(supabase)
 
     rows = []
     for h in hotspots:
-        seen_before = hotspot_seen_before(supabase, h["lat"], h["lon"])
+        seen_before = has_seen_before(seen_before_index, h["lat"], h["lon"])
 
         # Only call the (slow, network-bound) land-cover lookup when it's
         # actually needed - i.e. no facility nearby to classify against.
