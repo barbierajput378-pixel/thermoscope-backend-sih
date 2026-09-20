@@ -85,3 +85,11 @@ requirements before using ML tools.
   Alerts are sent only after hotspot writes and are deduplicated for the configured
   cooldown. With no email configuration they are safely logged as `[DRY RUN]`.
   Run `supabase/alerts_schema.sql` first.
+
+## Demo/presentation utility: fixed seed data
+
+`python pipeline/seed_demo_data.py` adds three fixed demonstration hotspots and
+two risk zones, then evaluates them through the real alert engine. It is manual,
+idempotent, and not part of the scheduled pipeline. Use
+`python pipeline/seed_demo_data.py --cleanup` after a presentation to remove only
+these fixed demo records and their alert audit rows.
