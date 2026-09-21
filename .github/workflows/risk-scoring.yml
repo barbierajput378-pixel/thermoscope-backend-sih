@@ -1,0 +1,36 @@
+name: Run daily risk scoring
+
+on:
+  schedule:
+    - cron: "15 0 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  score-risk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Compute facility risk scores
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REGION_BBOX: ${{ secrets.REGION_BBOX }}
+          RISK_WEATHER_API_URL: ${{ secrets.RISK_WEATHER_API_URL }}
+          RISK_WEATHER_API_KEY: ${{ secrets.RISK_WEATHER_API_KEY }}
+          RISK_HISTORY_DAYS: ${{ vars.RISK_HISTORY_DAYS || '90' }}
+          ENABLE_ALERTS: ${{ vars.ENABLE_ALERTS }}
+          ALERT_RISK_THRESHOLD: ${{ vars.ALERT_RISK_THRESHOLD || '80' }}
+          ALERT_EMAIL_PROVIDER: ${{ vars.ALERT_EMAIL_PROVIDER }}
+          ALERT_EMAIL_API_KEY: ${{ secrets.ALERT_EMAIL_API_KEY }}
+          ALERT_EMAIL_FROM: ${{ vars.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO_MONITORING_DESK: ${{ vars.ALERT_EMAIL_TO_MONITORING_DESK }}
+          ALERT_SMTP_HOST: ${{ vars.ALERT_SMTP_HOST }}
+          ALERT_SMTP_PORT: ${{ vars.ALERT_SMTP_PORT || '587' }}
+        run: python pipeline/risk/risk_scoring.py
