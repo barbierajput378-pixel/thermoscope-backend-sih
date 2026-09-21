@@ -1,5 +1,6 @@
 """Pulls raw thermal hotspots from NASA FIRMS for the configured region."""
 
+import time
 import requests
 import urllib3
 from config import FIRMS_MAP_KEY, REGION_BBOX
@@ -13,10 +14,33 @@ FIRMS_URL = (
 )
 
 
+def get_with_retries(url, attempts=5, connect_timeout=20, read_timeout=120, backoff=5):
+    """GET with retries + exponential backoff (5s, 10s, 20s, 40s)."""
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.get(url, timeout=(connect_timeout, read_timeout))
+            if response.status_code >= 500 or response.status_code == 429:
+                raise requests.exceptions.HTTPError(
+                    f"HTTP {response.status_code}", response=response
+                )
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status is not None and 400 <= status < 500 and status != 429:
+                raise
+            if attempt < attempts:
+                wait = backoff * (2 ** (attempt - 1))
+                print(f"[FIRMS] attempt {attempt}/{attempts} failed: {type(e).__name__}. Retrying in {wait}s...")
+                time.sleep(wait)
+    raise RuntimeError(f"FIRMS request failed after {attempts} attempts") from last_error
+
 def fetch_hotspots():
     """Returns a list of raw hotspot dicts: lat, lon, brightness, confidence, acq_date."""
     url = FIRMS_URL.format(map_key=FIRMS_MAP_KEY, bbox=REGION_BBOX)
-    response = requests.get(url, timeout=30)
+    response = get_with_retries(url)
     response.raise_for_status()
 
     hotspots = []
